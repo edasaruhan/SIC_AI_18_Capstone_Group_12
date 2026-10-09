@@ -1,0 +1,10 @@
+# Ham veri dosyalarını ve zipleri yoksay
+*.zip
+Data/
+pinfo.csv
+u1c677c.csv
+*.csv
+
+# Python önbellek dosyaları
+__pycache__/
+*.pyc
