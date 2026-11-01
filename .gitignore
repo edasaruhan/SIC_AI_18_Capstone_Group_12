@@ -1,10 +1,10 @@
-# Ham veri dosyalarını ve zipleri yoksay
+# Ham veri
 *.zip
-Data/
-pinfo.csv
-u1c677c.csv
+data/
 *.csv
 
-# Python önbellek dosyaları
+# Python
+.venv/
 __pycache__/
 *.pyc
+.ipynb_checkpoints/
