@@ -2,6 +2,7 @@
 *.zip
 data/
 *.csv
+!config/app_categories.csv
 
 # Python
 .venv/
