@@ -3,12 +3,13 @@ import numpy as np
 import pandas as pd
 
 OUT = Path("data/processed")
-GROUPS = ["kumar", "oyun", "sosyal_video", "genel_web", "dusuk"]
+GROUPS = ["kumar", "oyun", "sosyal_video", "genel_web", "iletisim", "dusuk"]
 
 ev = pd.read_parquet(OUT / "app_events.parquet")
 ev = ev[ev["exclude"] == 0].copy()
 ok = pd.read_csv(OUT / "participants_ok.csv")
 ev = ev[ev["pid"].isin(ok["pid"])].copy()
+ev.loc[ev["category"].isin(["mesajlasma", "iletisim", "eposta"]), "risk_group"] = "iletisim"
 ev["end"] = ev["ts"] + pd.to_timedelta(ev["dwell_s"], unit="s")
 
 win = pd.read_csv(OUT / "sleep_windows.csv")[["pid", "n_nights", "bed_min", "wake_min", "night_cover"]]
