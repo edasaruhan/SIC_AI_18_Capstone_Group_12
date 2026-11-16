@@ -1,55 +1,58 @@
-from pathlib import Path
+"""4a. adım: her katılımcının kişisel uyku penceresini tahmin eder.
+
+Yöntem: her gece, akşam-sabah arasında başlayan en uzun ekran-kapalı boşluk uyku sayılır;
+katılımcının yatış ve kalkış saati bu boşlukların ortancasıdır.
+Çıktı: sleep_windows.csv (bed_min / wake_min: gecenin 18:00'inden itibaren dakika)
+"""
 import pandas as pd
+from common import PROCESSED, WINDOW_ANCHOR_H, load_valid_sessions
 
-OUT = Path("data/processed")
-s = pd.read_parquet(OUT / "sessions.parquet")
-ok = pd.read_csv(OUT / "participants_ok.csv")
-s = s[s["valid"] & s["pid"].isin(ok["pid"])].copy()
-s["end_local"] = s["start"] + pd.to_timedelta(s["duration_s"], unit="s")
-s = s.sort_values(["pid", "start"])
-
-# ardışık oturumlar arasındaki ekran kapalı boşluklar
-s["next_start"] = s.groupby("pid")["start"].shift(-1)
-gaps = s.loc[s["next_start"].notna(), ["pid", "end_local", "next_start"]].rename(
-    columns={"end_local": "gap_start", "next_start": "gap_end"})
-gaps["gap_h"] = (gaps["gap_end"] - gaps["gap_start"]).dt.total_seconds() / 3600
-
-h = gaps["gap_start"].dt.hour
-gaps = gaps[(gaps["gap_h"] >= 3) & (gaps["gap_h"] <= 14) & ((h >= 18) | (h < 9))].copy()
-gaps["night"] = (gaps["gap_start"] - pd.Timedelta(hours=12)).dt.normalize()
-
-# her gece için en uzun boşluk
-best = gaps.sort_values("gap_h").groupby(["pid", "night"]).tail(1).copy()
-ref = best["night"] + pd.Timedelta(hours=18)  # o gecenin 18:00'i
-best["bed_min"] = (best["gap_start"] - ref).dt.total_seconds() / 60
-best["wake_min"] = (best["gap_end"] - ref).dt.total_seconds() / 60
+MIN_GAP_H, MAX_GAP_H = 3, 14
+EVENING_START_H, MORNING_END_H = 18, 9    # uyku boşluğu bu saatler arasında başlamalı
 
 
-def clock(m):
-    if pd.isna(m):
+def nightly_sleep_gaps(sessions):
+    sessions = sessions.sort_values(["pid", "start"])
+    gaps = pd.DataFrame({"pid": sessions["pid"], "gap_start": sessions["end_local"],
+                         "gap_end": sessions.groupby("pid")["start"].shift(-1)}).dropna(subset=["gap_end"])
+    gaps["gap_h"] = (gaps["gap_end"] - gaps["gap_start"]).dt.total_seconds() / 3600
+    start_hour = gaps["gap_start"].dt.hour
+    gaps = gaps[gaps["gap_h"].between(MIN_GAP_H, MAX_GAP_H)
+                & ((start_hour >= EVENING_START_H) | (start_hour < MORNING_END_H))].copy()
+    gaps["night"] = (gaps["gap_start"] - pd.Timedelta(hours=12)).dt.normalize()
+    longest = gaps.sort_values("gap_h").groupby(["pid", "night"]).tail(1).copy()
+    anchor = longest["night"] + pd.Timedelta(hours=WINDOW_ANCHOR_H)
+    longest["bed_min"] = (longest["gap_start"] - anchor).dt.total_seconds() / 60
+    longest["wake_min"] = (longest["gap_end"] - anchor).dt.total_seconds() / 60
+    return longest
+
+
+def as_clock(minutes_from_anchor):
+    if pd.isna(minutes_from_anchor):
         return None
-    m = int(round(m)) + 18 * 60
-    return f"{(m // 60) % 24:02d}:{m % 60:02d}"
+    minutes = int(round(minutes_from_anchor)) + WINDOW_ANCHOR_H * 60
+    return f"{(minutes // 60) % 24:02d}:{minutes % 60:02d}"
 
 
-p = best.groupby("pid").agg(n_nights=("gap_h", "size"), bed_min=("bed_min", "median"),
-                            wake_min=("wake_min", "median"), sleep_gap_h=("gap_h", "median"))
-days = s.groupby("pid")["start"].apply(lambda x: x.dt.normalize().nunique()).rename("n_days")
-p = p.join(days, how="right")
-p["n_nights"] = p["n_nights"].fillna(0)
-p["night_cover"] = p["n_nights"] / p["n_days"]
-p["bedtime"] = p["bed_min"].map(clock)
-p["waketime"] = p["wake_min"].map(clock)
-p.to_csv(OUT / "sleep_windows.csv")
+def main():
+    sessions = load_valid_sessions()
+    windows = nightly_sleep_gaps(sessions).groupby("pid").agg(
+        n_nights=("gap_h", "size"), bed_min=("bed_min", "median"),
+        wake_min=("wake_min", "median"), sleep_gap_h=("gap_h", "median"))
+    n_days = sessions.groupby("pid")["start"].apply(lambda s: s.dt.normalize().nunique()).rename("n_days")
+    windows = windows.join(n_days, how="right")
+    windows["n_nights"] = windows["n_nights"].fillna(0)
+    windows["night_cover"] = windows["n_nights"] / windows["n_days"]
+    windows["bedtime"] = windows["bed_min"].map(as_clock)
+    windows["waketime"] = windows["wake_min"].map(as_clock)
+    windows.to_csv(PROCESSED / "sleep_windows.csv")
 
-pd.set_option("display.width", 200)
-print("Katılımcı:", len(p), "| uyku boşluğu bulunan:", int((p["n_nights"] > 0).sum()))
-print("Ortanca yatış:", clock(p["bed_min"].median()), "| ortanca kalkış:", clock(p["wake_min"].median()))
-print("\nUyku boşluğu uzunluğu (saat, katılımcı ortancası):")
-print(p["sleep_gap_h"].describe().round(2))
-print("\nGece kapsama oranı (uyku boşluğu bulunan gün payı):")
-print(p["night_cover"].describe().round(2))
-print("Kapsama < 0.5 olan katılımcı:", int((p["night_cover"] < 0.5).sum()))
-print("\nGece oranı yüksek çıkan 8 katılımcı:")
-print(p.loc[["P270", "P021", "P192", "P199", "P049", "P218", "P274", "P053"],
-            ["n_nights", "n_days", "bedtime", "waketime", "sleep_gap_h"]].round(1))
+    print("Katılımcı:", len(windows), "| uyku boşluğu bulunan:", int((windows["n_nights"] > 0).sum()))
+    print("Ortanca yatış:", as_clock(windows["bed_min"].median()),
+          "| ortanca kalkış:", as_clock(windows["wake_min"].median()))
+    print("\nUyku boşluğu (saat) ve gece kapsama oranı:")
+    print(windows[["sleep_gap_h", "night_cover"]].describe().round(2))
+
+
+if __name__ == "__main__":
+    main()

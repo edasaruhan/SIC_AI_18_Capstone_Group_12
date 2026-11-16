@@ -1,61 +1,78 @@
-from pathlib import Path
+"""4c. adım: "gece ekranı hep açık" görünen katılımcıları bulur.
+
+Uyku penceresi güvenilmez çıkan katılımcılarda ekran gece açık ama uygulama olayı yoksa
+(gece/gündüz olay oranı düşükse) bu kullanım değil cihaz davranışıdır; katılımcı şüpheli
+işaretlenir. Karşılaştırma için güvenilir pencereli rastgele bir grup da ölçülür.
+Çıktı: night_activity.csv
+"""
 import numpy as np
 import pandas as pd
+from common import (PROCESSED, WINDOW_ANCHOR_H, is_real_app, load_ok_participants,
+                    load_sleep_windows, raw_files)
 
-DATA = Path("mobile_phone_use/data")
-OUT = Path("data/processed")
+SUSPECT_RATIO = 0.30        # gece olay hızı gündüzün bu oranının altındaysa şüpheli
+MIN_NIGHT_H = 0.5           # oran için gereken en az uyku penceresi ekran süresi
+COMPARISON_SAMPLE = 80
+MINUTES_PER_DAY = 1440
+WINDOW_ANCHOR_MIN = WINDOW_ANCHOR_H * 60
 
-ok = set(pd.read_csv(OUT / "participants_ok.csv")["pid"])
-win = pd.read_csv(OUT / "sleep_windows.csv")[["pid", "n_nights", "bed_min", "wake_min", "night_cover"]]
-win["reliable"] = (win["night_cover"] >= 0.5) & (win["n_nights"] >= 7)
-ref_bed = win.loc[win["reliable"], "bed_min"].median()
-ref_wake = win.loc[win["reliable"], "wake_min"].median()
-win["bed_min"] = np.where(win["reliable"], win["bed_min"], ref_bed)
-win["wake_min"] = np.where(win["reliable"], win["wake_min"], ref_wake)
-win["bed_c"] = (win["bed_min"] + 1080) % 1440    # gün içi dakika
-win["wake_c"] = (win["wake_min"] + 1080) % 1440
 
-rng = np.random.default_rng(0)
-unrel = list(win.loc[~win["reliable"], "pid"])
-rel = list(rng.choice(win.loc[win["reliable"], "pid"], size=80, replace=False))
-use = set(unrel) | set(rel)
+def pick_participants(windows):
+    """Güvenilmez pencerelilerin hepsi + güvenilirlerden rastgele bir karşılaştırma grubu."""
+    rng = np.random.default_rng(0)
+    reliable = windows.loc[windows["reliable"], "pid"]
+    sample = rng.choice(reliable, size=min(COMPARISON_SAMPLE, len(reliable)), replace=False)
+    return set(windows.loc[~windows["reliable"], "pid"]) | set(sample)
 
-ev = []
-for i, f in enumerate(sorted(DATA.glob("*.csv"))):
-    pid = f"P{i:03d}"
-    if pid not in ok or pid not in use:
-        continue
-    df = pd.read_csv(f, usecols=["ts", "sensor_id", "App_Value"], low_memory=False)
-    a = df[df["sensor_id"] == "App"].dropna(subset=["App_Value"])
-    a = a[~a["App_Value"].str.startswith(("+", "=", "-")) & (a["App_Value"] != "org.pielot.sns2")]
-    t = pd.to_datetime(a["ts"])
-    ev.append(pd.DataFrame({"pid": pid, "mod": (t.dt.hour * 60 + t.dt.minute).values}))
-ev = pd.concat(ev).merge(win[["pid", "bed_c", "wake_c", "reliable"]], on="pid")
-wrap = ev["bed_c"] > ev["wake_c"]
-ev["night"] = np.where(wrap, (ev["mod"] >= ev["bed_c"]) | (ev["mod"] < ev["wake_c"]),
-                       (ev["mod"] >= ev["bed_c"]) & (ev["mod"] < ev["wake_c"]))
-cnt = ev.groupby("pid").agg(n_app=("night", "size"), n_night=("night", "sum"))
 
-# ekran saatleri
-s = pd.read_parquet(OUT / "sessions.parquet")
-s = s[s["valid"] & s["pid"].isin(cnt.index)]
-total_h = s.groupby("pid")["duration_s"].sum() / 3600
-ov = pd.read_parquet(OUT / "sleep_overlap.parquet")
-night_h = ov[ov["pid"].isin(cnt.index)].groupby("pid")["overlap_min"].sum() / 60
+def app_event_minutes(pids):
+    """Seçilen katılımcıların uygulama olayları: gün içi dakika (0-1439)."""
+    events = []
+    for pid, path in raw_files():
+        if pid not in pids:
+            continue
+        df = pd.read_csv(path, usecols=["ts", "sensor_id", "App_Value"], low_memory=False)
+        apps = df[df["sensor_id"] == "App"].dropna(subset=["App_Value"])
+        ts = pd.to_datetime(apps.loc[is_real_app(apps["App_Value"]), "ts"])
+        events.append(pd.DataFrame({"pid": pid, "minute": (ts.dt.hour * 60 + ts.dt.minute).values}))
+    return pd.concat(events)
 
-r = cnt.join(total_h.rename("total_h")).join(night_h.rename("night_h"))
-r = r.join(win.set_index("pid")["reliable"])
-r["night_rate"] = r["n_night"] / r["night_h"].where(r["night_h"] > 0.5)
-r["day_rate"] = (r["n_app"] - r["n_night"]) / (r["total_h"] - r["night_h"])
-r["ratio"] = r["night_rate"] / r["day_rate"]
 
-pd.set_option("display.width", 200)
-for flag, g in r.groupby("reliable"):
-    print(f"\nGüvenilir pencere = {flag}: {len(g)} katılımcı")
-    print("  gece/gündüz olay oranı (ortanca):", round(g["ratio"].median(), 2))
-    print("  oranı < 0.30 olan katılımcı payı:", round((g["ratio"] < 0.30).mean(), 2))
-    print("  uyku penceresinde ekran saati (ortanca, toplam):", round(g["night_h"].median(), 1))
+def count_night_events(events, windows):
+    windows = windows.assign(
+        bed_clock=(windows["bed_min"] + WINDOW_ANCHOR_MIN) % MINUTES_PER_DAY,
+        wake_clock=(windows["wake_min"] + WINDOW_ANCHOR_MIN) % MINUTES_PER_DAY)
+    ev = events.merge(windows[["pid", "bed_clock", "wake_clock"]], on="pid")
+    after_bed, before_wake = ev["minute"] >= ev["bed_clock"], ev["minute"] < ev["wake_clock"]
+    wraps_midnight = ev["bed_clock"] > ev["wake_clock"]
+    ev["night"] = np.where(wraps_midnight, after_bed | before_wake, after_bed & before_wake)
+    return ev.groupby("pid").agg(n_app=("night", "size"), n_night=("night", "sum"))
 
-r["night_suspect"] = (~r["reliable"].astype(bool)) & (r["ratio"] < 0.30)
-r[["reliable", "night_h", "ratio", "night_suspect"]].to_csv(OUT / "night_activity.csv")
-print("\nŞüpheli (güvenilmez pencere ve oran < 0.30):", int(r["night_suspect"].sum()))
+
+def main():
+    windows = load_sleep_windows()
+    pids = pick_participants(windows) & set(load_ok_participants()["pid"])
+    result = count_night_events(app_event_minutes(pids), windows)
+
+    sessions = pd.read_parquet(PROCESSED / "sessions.parquet")
+    sessions = sessions[sessions["valid"] & sessions["pid"].isin(result.index)]
+    overlap = pd.read_parquet(PROCESSED / "sleep_overlap.parquet")
+    result["total_h"] = sessions.groupby("pid")["duration_s"].sum() / 3600
+    result["night_h"] = overlap.groupby("pid")["overlap_min"].sum() / 60
+    result = result.join(windows.set_index("pid")["reliable"])
+
+    night_rate = result["n_night"] / result["night_h"].where(result["night_h"] > MIN_NIGHT_H)
+    day_rate = (result["n_app"] - result["n_night"]) / (result["total_h"] - result["night_h"])
+    result["ratio"] = night_rate / day_rate
+    result["night_suspect"] = ~result["reliable"].astype(bool) & (result["ratio"] < SUSPECT_RATIO)
+    result[["reliable", "night_h", "ratio", "night_suspect"]].to_csv(PROCESSED / "night_activity.csv")
+
+    for reliable, group in result.groupby("reliable"):
+        print(f"Güvenilir pencere = {reliable}: {len(group)} katılımcı | "
+              f"gece/gündüz olay oranı (ortanca): {group['ratio'].median():.2f} | "
+              f"oranı < {SUSPECT_RATIO} olanların payı: {(group['ratio'] < SUSPECT_RATIO).mean():.2f}")
+    print("Şüpheli katılımcı:", int(result["night_suspect"].sum()))
+
+
+if __name__ == "__main__":
+    main()

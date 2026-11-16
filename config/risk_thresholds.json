@@ -1,0 +1,51 @@
+{
+  "quantiles": [
+    0.9,
+    0.97,
+    0.995
+  ],
+  "levels": [
+    "Dikkat",
+    "Yüksek",
+    "Kritik"
+  ],
+  "thresholds": [
+    0.3404,
+    0.5418,
+    0.7375
+  ],
+  "params": {
+    "PTS": {
+      "cat": 20,
+      "sleep": 25,
+      "dev": 20,
+      "loop": 15
+    },
+    "H_CAT": 3.0,
+    "W_CAT": {
+      "kumar_h": 1.0,
+      "oyun_h": 1.0,
+      "sosyal_video_h": 0.7,
+      "genel_web_h": 0.3,
+      "iletisim_h": 0.15
+    },
+    "H_SLEEP": 1.0,
+    "W_SLEEP": {
+      "kumar_sleep_h": 1.2,
+      "oyun_sleep_h": 1.2,
+      "sosyal_video_sleep_h": 1.0,
+      "genel_web_sleep_h": 0.6,
+      "iletisim_sleep_h": 0.8,
+      "dusuk_sleep_h": 0.3
+    },
+    "BASE_DAYS": 14,
+    "LOOP": {
+      "re_lo": 3,
+      "re_hi": 15,
+      "bout_lo": 30,
+      "bout_hi": 90
+    }
+  },
+  "n_participant_days": 7394,
+  "n_participants": 274
+}

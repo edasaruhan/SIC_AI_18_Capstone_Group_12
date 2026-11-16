@@ -1,53 +1,63 @@
-from pathlib import Path
+"""3. adım: oturumlardan günlük ekran özellikleri.
+
+Çıktı: daily_features.parquet (pid, date, screen_h, night_ratio, n_sessions, short_share, n_unlocked)
+"""
 import numpy as np
 import pandas as pd
+from common import PROCESSED, load_ok_participants, load_valid_sessions
 
-OUT = Path("data/processed")
-s = pd.read_parquet(OUT / "sessions.parquet")
-ok = pd.read_csv(OUT / "participants_ok.csv")
-s = s[s["valid"] & s["pid"].isin(ok["pid"])].copy()
-s["end_local"] = s["start"] + pd.to_timedelta(s["duration_s"], unit="s")
+NIGHT_END_H = 6          # gece oranı: 00:00-06:00 arasındaki ekran süresinin payı
+SHORT_SESSION_S = 30
 
-# 1) Gece yarısını aşan oturumları gün sınırında böl
-cross = s["start"].dt.normalize() != s["end_local"].dt.normalize()
-rows = []
-for r in s[cross].itertuples():
-    cur = r.start
-    while cur < r.end_local:
-        nxt = min(cur.normalize() + pd.Timedelta(days=1), r.end_local)
-        rows.append((r.pid, cur, nxt, (nxt - cur).total_seconds()))
-        cur = nxt
-parts = pd.DataFrame(rows, columns=["pid", "start", "end_local", "duration_s"])
-base = s.loc[~cross, ["pid", "start", "end_local", "duration_s"]]
-seg = pd.concat([base, parts], ignore_index=True)
-seg["date"] = seg["start"].dt.normalize()
 
-# 2) Segment başına gece (00:00-06:00) saniyesi
-st, en, d0 = seg["start"].values, seg["end_local"].values, seg["date"].values
-night_end = d0 + np.timedelta64(6, "h")
-ov = (np.minimum(en, night_end) - np.maximum(st, d0)) / np.timedelta64(1, "s")
-seg["night_s"] = np.clip(ov, 0, None)
+def split_at_midnight(sessions):
+    """Gece yarısını aşan oturumları gün sınırında böler; süre doğru güne yazılsın diye."""
+    crosses = sessions["start"].dt.normalize() != sessions["end_local"].dt.normalize()
+    pieces = []
+    for row in sessions[crosses].itertuples():
+        cursor = row.start
+        while cursor < row.end_local:
+            piece_end = min(cursor.normalize() + pd.Timedelta(days=1), row.end_local)
+            pieces.append((row.pid, cursor, piece_end, (piece_end - cursor).total_seconds()))
+            cursor = piece_end
+    cols = ["pid", "start", "end_local", "duration_s"]
+    segments = pd.concat([sessions.loc[~crosses, cols], pd.DataFrame(pieces, columns=cols)], ignore_index=True)
+    segments["date"] = segments["start"].dt.normalize()
+    return segments
 
-g = seg.groupby(["pid", "date"]).agg(screen_s=("duration_s", "sum"),
-                                     night_s=("night_s", "sum"))
-g["screen_h"] = g["screen_s"] / 3600
-g["night_ratio"] = g["night_s"] / g["screen_s"]
 
-# 3) Oturum bazlı özellikler (orijinal oturumlar, başlangıç gününe göre)
-s["date"] = s["start"].dt.normalize()
-h = s.groupby(["pid", "date"]).agg(
-    n_sessions=("duration_s", "size"),
-    short_share=("duration_s", lambda x: (x < 30).mean()),
-    n_unlocked=("unlocked", "sum"),
-)
+def screen_time_per_day(segments):
+    day_start = segments["date"].values
+    night_end = day_start + np.timedelta64(NIGHT_END_H, "h")
+    night_s = (np.minimum(segments["end_local"].values, night_end)
+               - np.maximum(segments["start"].values, day_start)) / np.timedelta64(1, "s")
+    segments = segments.assign(night_s=np.clip(night_s, 0, None))
+    daily = segments.groupby(["pid", "date"]).agg(screen_s=("duration_s", "sum"), night_s=("night_s", "sum"))
+    daily["screen_h"] = daily["screen_s"] / 3600
+    daily["night_ratio"] = daily["night_s"] / daily["screen_s"]
+    return daily[["screen_h", "night_ratio"]]
 
-daily = g[["screen_h", "night_ratio"]].join(h, how="outer").reset_index()
-daily = daily.merge(ok[["pid", "unlock_reliable"]], on="pid")
-daily.loc[~daily["unlock_reliable"], "n_unlocked"] = np.nan
-daily.to_parquet(OUT / "daily_features.parquet")
 
-pd.set_option("display.width", 200)
-print("Katılımcı:", daily["pid"].nunique(), "| katılımcı-gün:", len(daily))
-print("24 saati aşan gün sayısı:", int((daily["screen_h"] > 24).sum()))
-print(daily[["screen_h", "night_ratio", "n_sessions", "short_share",
-             "n_unlocked"]].describe().round(2))
+def session_counts_per_day(sessions):
+    """Oturum sayıları, oturumun başladığı güne yazılır."""
+    sessions = sessions.assign(date=sessions["start"].dt.normalize())
+    return sessions.groupby(["pid", "date"]).agg(
+        n_sessions=("duration_s", "size"),
+        short_share=("duration_s", lambda d: (d < SHORT_SESSION_S).mean()),
+        n_unlocked=("unlocked", "sum"))
+
+
+def main():
+    sessions = load_valid_sessions()
+    daily = (screen_time_per_day(split_at_midnight(sessions))
+             .join(session_counts_per_day(sessions), how="outer").reset_index())
+    daily = daily.merge(load_ok_participants()[["pid", "unlock_reliable"]], on="pid")
+    daily.loc[~daily["unlock_reliable"], "n_unlocked"] = np.nan
+    daily.to_parquet(PROCESSED / "daily_features.parquet")
+
+    print("Katılımcı:", daily["pid"].nunique(), "| katılımcı-gün:", len(daily))
+    print(daily.drop(columns=["pid", "date", "unlock_reliable"]).describe().round(2))
+
+
+if __name__ == "__main__":
+    main()

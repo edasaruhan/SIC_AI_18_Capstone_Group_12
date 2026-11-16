@@ -1,30 +1,29 @@
+"""5a. adım: hangi uygulama kaç olayda ve kaç katılımcıda görülüyor? (kategori eşlemesinin girdisi)
+
+Çıktı: app_counts.csv
+"""
 from collections import Counter
-from pathlib import Path
 import pandas as pd
+from common import PROCESSED, is_real_app, load_ok_participants, raw_files
 
-DATA = Path("mobile_phone_use/data")
-OUT = Path("data/processed")
-ok = set(pd.read_csv(OUT / "participants_ok.csv")["pid"])
 
-events, users = Counter(), Counter()
-for i, f in enumerate(sorted(DATA.glob("*.csv"))):
-    if f"P{i:03d}" not in ok:
-        continue
-    df = pd.read_csv(f, usecols=["sensor_id", "App_Value"], low_memory=False)
-    a = df.loc[df["sensor_id"] == "App", "App_Value"].dropna()
-    a = a[~a.str.startswith(("+", "=", "-")) & (a != "org.pielot.sns2")]
-    vc = a.value_counts()
-    events.update(vc.to_dict())
-    users.update(vc.index)
+def main():
+    ok_pids = set(load_ok_participants()["pid"])
+    events, users = Counter(), Counter()
+    for pid, path in raw_files():
+        if pid not in ok_pids:
+            continue
+        df = pd.read_csv(path, usecols=["sensor_id", "App_Value"], low_memory=False)
+        apps = df.loc[df["sensor_id"] == "App", "App_Value"].dropna()
+        counts = apps[is_real_app(apps)].value_counts()
+        events.update(counts.to_dict())
+        users.update(counts.index)
 
-table = pd.DataFrame({"events": pd.Series(events), "users": pd.Series(users)})
-table = table.sort_values("users", ascending=False)
-table.to_csv(OUT / "app_counts.csv")
+    table = pd.DataFrame({"events": pd.Series(events), "users": pd.Series(users)})
+    table = table.sort_values("users", ascending=False)
+    table.to_csv(PROCESSED / "app_counts.csv")
+    print("Farklı uygulama:", len(table), "| toplam olay:", int(table["events"].sum()))
 
-print("Farklı uygulama:", len(table))
-print("Toplam olay:", int(table["events"].sum()))
-for k in (50, 100, 200):
-    share = table.head(k)["events"].sum() / table["events"].sum()
-    print(f"Kullanıcı sayısına göre en sık {k} uygulama, olayların payı: {share:.2f}")
-print()
-print(table.head(60).to_string())
+
+if __name__ == "__main__":
+    main()

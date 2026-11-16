@@ -2,9 +2,5 @@ pandas
 numpy
 scipy
 scikit-learn
-xgboost
-shap
-imbalanced-learn
 matplotlib
 pyarrow
-ipykernel

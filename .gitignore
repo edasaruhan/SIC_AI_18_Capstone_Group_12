@@ -1,11 +1,13 @@
-# Ham veri
+# Ham veri ve katılımcı düzeyindeki tablolar
 *.zip
 data/
+mobile_phone_use/
 *.csv
 !config/app_categories.csv
+!reports/*.csv
 
 # Python
-.venv/
+.venv*/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/

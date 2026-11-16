@@ -1,0 +1,73 @@
+olcum,degisken,n,rho,p,rho_kismi,p_kismi,q_bh
+Ruh hali (yüksek=olumlu),risk_ort,274,-0.0728,0.2294,-0.0276,0.6509,0.4516
+Ruh hali (yüksek=olumlu),dikkat_gun_payi,274,-0.0729,0.2292,-0.0445,0.465,0.4516
+Ruh hali (yüksek=olumlu),kategori,274,-0.0956,0.1145,-0.0505,0.4072,0.317
+Ruh hali (yüksek=olumlu),uyku,274,-0.0651,0.283,-0.0211,0.7288,0.4931
+Ruh hali (yüksek=olumlu),sapma,274,0.0014,0.9809,-0.0152,0.8032,0.9809
+Ruh hali (yüksek=olumlu),dongu,274,-0.0724,0.2325,-0.0218,0.7207,0.4516
+Ruh hali (yüksek=olumlu),ekran_saat,274,-0.0739,0.2226,-0.0418,0.4922,0.4516
+Ruh hali (yüksek=olumlu),uyku_kullanim_saat,274,-0.0537,0.376,-0.0114,0.8521,0.5418
+Uyanıklık (yüksek=uyanık),risk_ort,274,-0.0888,0.1426,-0.0356,0.5589,0.361
+Uyanıklık (yüksek=uyanık),dikkat_gun_payi,274,-0.0622,0.3047,-0.0279,0.6469,0.4986
+Uyanıklık (yüksek=uyanık),kategori,274,-0.129,0.0328,-0.0769,0.2061,0.1575
+Uyanıklık (yüksek=uyanık),uyku,274,-0.055,0.3642,-0.0018,0.9766,0.5418
+Uyanıklık (yüksek=uyanık),sapma,274,0.1069,0.0772,0.0919,0.1307,0.2649
+Uyanıklık (yüksek=uyanık),dongu,274,-0.1009,0.0956,-0.0424,0.4862,0.2992
+Uyanıklık (yüksek=uyanık),ekran_saat,274,-0.0909,0.1334,-0.0535,0.379,0.3556
+Uyanıklık (yüksek=uyanık),uyku_kullanim_saat,274,-0.0437,0.4715,0.0073,0.9041,0.6287
+Sakinlik (yüksek=sakin),risk_ort,274,0.0256,0.6734,-0.0211,0.7288,0.7424
+Sakinlik (yüksek=sakin),dikkat_gun_payi,274,0.0453,0.4551,0.0178,0.77,0.6182
+Sakinlik (yüksek=sakin),kategori,274,0.0645,0.2876,0.0195,0.7492,0.4931
+Sakinlik (yüksek=sakin),uyku,274,0.0187,0.7577,-0.0262,0.667,0.8143
+Sakinlik (yüksek=sakin),sapma,274,-0.0537,0.3763,-0.0319,0.5999,0.5418
+Sakinlik (yüksek=sakin),dongu,274,0.0297,0.6242,-0.0226,0.7105,0.7368
+Sakinlik (yüksek=sakin),ekran_saat,274,0.0372,0.5394,0.0038,0.9498,0.6814
+Sakinlik (yüksek=sakin),uyku_kullanim_saat,274,0.0043,0.9429,-0.0398,0.5136,0.9561
+Sıkılma payı,risk_ort,274,0.1429,0.0179,0.0658,0.2792,0.0993
+Sıkılma payı,dikkat_gun_payi,274,0.1146,0.0581,0.0675,0.267,0.2343
+Sıkılma payı,kategori,274,0.161,0.0076,0.0845,0.1648,0.0573
+Sıkılma payı,uyku,274,0.1168,0.0534,0.041,0.5005,0.2343
+Sıkılma payı,sapma,274,-0.1353,0.0251,-0.1025,0.0916,0.1292
+Sıkılma payı,dongu,274,0.1597,0.0081,0.0745,0.2208,0.0573
+Sıkılma payı,ekran_saat,274,0.1532,0.0111,0.0991,0.1027,0.0667
+Sıkılma payı,uyku_kullanim_saat,274,0.1117,0.0648,0.0383,0.5292,0.2454
+PHQ-8 depresyon,risk_ort,54,0.178,0.1978,0.184,0.1917,0.4315
+PHQ-8 depresyon,dikkat_gun_payi,54,0.148,0.2856,0.1865,0.1855,0.4931
+PHQ-8 depresyon,kategori,54,0.2341,0.0885,0.223,0.112,0.2895
+PHQ-8 depresyon,uyku,54,0.0596,0.6684,0.0611,0.6671,0.7424
+PHQ-8 depresyon,sapma,54,-0.0859,0.5368,0.0555,0.6958,0.6814
+PHQ-8 depresyon,dongu,54,0.1873,0.175,0.1656,0.2408,0.42
+PHQ-8 depresyon,ekran_saat,54,0.0826,0.5526,0.0738,0.6033,0.686
+PHQ-8 depresyon,uyku_kullanim_saat,54,-0.013,0.9259,-0.0059,0.9669,0.9561
+Sıkılma yatkınlığı (BPS),risk_ort,78,0.1179,0.3039,0.1244,0.2842,0.4986
+Sıkılma yatkınlığı (BPS),dikkat_gun_payi,78,0.0524,0.6484,0.0775,0.506,0.7424
+Sıkılma yatkınlığı (BPS),kategori,78,0.1507,0.1878,0.1463,0.2072,0.4226
+Sıkılma yatkınlığı (BPS),uyku,78,0.3176,0.0046,0.3185,0.005,0.0414
+Sıkılma yatkınlığı (BPS),sapma,78,-0.1527,0.1819,-0.0719,0.5371,0.4225
+Sıkılma yatkınlığı (BPS),dongu,78,0.0487,0.672,0.028,0.81,0.7424
+Sıkılma yatkınlığı (BPS),ekran_saat,78,0.2049,0.072,0.2204,0.0557,0.259
+Sıkılma yatkınlığı (BPS),uyku_kullanim_saat,78,0.295,0.0087,0.3007,0.0083,0.0573
+Sorumluluk,risk_ort,136,-0.1018,0.2384,-0.0677,0.4369,0.4516
+Sorumluluk,dikkat_gun_payi,136,-0.0781,0.3662,-0.0559,0.5211,0.5418
+Sorumluluk,kategori,136,-0.1366,0.1128,-0.0971,0.2644,0.317
+Sorumluluk,uyku,136,-0.0773,0.3713,-0.0403,0.6434,0.5418
+Sorumluluk,sapma,136,0.0133,0.8777,-0.0228,0.7934,0.9293
+Sorumluluk,dongu,136,-0.1255,0.1454,-0.0856,0.3253,0.361
+Sorumluluk,ekran_saat,136,-0.1363,0.1137,-0.1116,0.1992,0.317
+Sorumluluk,uyku_kullanim_saat,136,-0.0844,0.3285,-0.0504,0.5627,0.5257
+Nevrotiklik,risk_ort,136,0.0542,0.531,0.0281,0.7471,0.6814
+Nevrotiklik,dikkat_gun_payi,136,0.0923,0.2849,0.08,0.3584,0.4931
+Nevrotiklik,kategori,136,0.0431,0.6186,0.0018,0.9831,0.7368
+Nevrotiklik,uyku,136,0.0356,0.6805,0.0166,0.8495,0.7424
+Nevrotiklik,sapma,136,0.0449,0.6039,0.0462,0.5962,0.7368
+Nevrotiklik,dongu,136,0.0715,0.4082,0.0371,0.6707,0.5652
+Nevrotiklik,ekran_saat,136,0.0721,0.4042,0.0585,0.502,0.5652
+Nevrotiklik,uyku_kullanim_saat,136,0.0074,0.9322,-0.0046,0.9582,0.9561
+Yaş,risk_ort,274,-0.2838,0.0,,,0.0
+Yaş,dikkat_gun_payi,274,-0.1782,0.0031,,,0.0317
+Yaş,kategori,274,-0.2895,0.0,,,0.0
+Yaş,uyku,274,-0.2726,0.0,,,0.0001
+Yaş,sapma,274,0.1144,0.0586,,,0.2343
+Yaş,dongu,274,-0.316,0.0,,,0.0
+Yaş,ekran_saat,274,-0.2056,0.0006,,,0.0074
+Yaş,uyku_kullanim_saat,274,-0.2611,0.0,,,0.0002

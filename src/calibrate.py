@@ -1,60 +1,104 @@
+"""8. adım: risk skorunu hesaplar, eşikleri veriden belirler ve sağlamlığını sınar.
+
+Çıktı: risk_daily.parquet, config/risk_thresholds.json, reports/calibration.txt
+"""
 import copy
-from pathlib import Path
+import json
 import numpy as np
 import pandas as pd
-from risk import DEFAULT, compute_components
+from common import CONFIG, PROCESSED, REPORTS, load_analysis_days
+from risk import COMPONENTS, DEFAULT, LEVELS, QUANTILES, add_levels, compute_components, thresholds
 
-OUT = Path("data/processed")
-master = pd.read_parquet(OUT / "master_daily.parquet")
-v = master[~master["night_suspect"]].copy()
-
-r0 = compute_components(v)
-base_r = r0["risk"]
-
-# 1) Yüzdelik tabanlı eşikler
-th = base_r.quantile([0.90, 0.97, 0.995])
-print("Önerilen eşikler (risk, 0-1): Dikkat >=", round(th.iloc[0], 3),
-      "| Yüksek >=", round(th.iloc[1], 3), "| Kritik >=", round(th.iloc[2], 3))
-r0["level"] = pd.cut(base_r, [-1, th.iloc[0], th.iloc[1], th.iloc[2], 2],
-                     labels=["Normal", "Dikkat", "Yüksek", "Kritik"], right=False)
-
-# 2) Uyarı yükü (kullanıcı başına Dikkat+ gün payı)
-flag = (r0["level"] != "Normal")
-per = flag.groupby(r0["pid"]).mean()
-print("\nKatılımcı başına Dikkat veya üstü gün payı:")
-print(per.describe(percentiles=[0.5, 0.9]).round(3))
-print("En az bir Kritik günü olan katılımcı payı:",
-      round(r0.loc[r0["level"] == "Kritik", "pid"].nunique() / r0["pid"].nunique(), 3))
-
-print("\nSeviyeye göre bileşen ortalamaları (puan):")
-print(r0.groupby("level", observed=True)[["cat_pts", "sleep_pts", "dev_pts", "loop_pts"]].mean().round(1))
-
-# 3) Duyarlılık: parametreleri ±%25 rastgele oynat
-rng = np.random.default_rng(0)
+N_PERTURBATIONS = 30
+PERTURB_RANGE = (0.75, 1.25)
+TOP_SHARE = 0.10
 
 
-def perturb(p):
-    q = copy.deepcopy(p)
-    for k in q["PTS"]:
-        q["PTS"][k] *= rng.uniform(0.75, 1.25)
-    for k in ("H_CAT", "H_SLEEP"):
-        q[k] *= rng.uniform(0.75, 1.25)
-    for grp in ("W_CAT", "W_SLEEP"):
-        for k in q[grp]:
-            q[grp][k] *= rng.uniform(0.75, 1.25)
-    return q
+def top_days(risk):
+    return set(risk.nlargest(int(TOP_SHARE * len(risk))).index)
 
 
-def top10(s):
-    return set(s.nlargest(int(0.10 * len(s))).index)
+def agreement(reference, other):
+    """İki skorun uyumu: Spearman ve en riskli günlerin Jaccard örtüşmesi."""
+    a, b = top_days(reference), top_days(other)
+    return reference.corr(other, method="spearman"), len(a & b) / len(a | b)
 
 
-A = top10(base_r)
-res = []
-for _ in range(30):
-    r = compute_components(v, perturb(DEFAULT))["risk"]
-    B = top10(r)
-    res.append((base_r.corr(r, method="spearman"), len(A & B) / len(A | B)))
-res = pd.DataFrame(res, columns=["spearman", "top10_ortusme"])
-print("\nDuyarlılık (30 rastgele parametre seti):")
-print(res.describe().loc[["mean", "min"]].round(3))
+def perturbed(params, rng):
+    """Bütün ağırlık ve ölçek parametrelerini rastgele ±%25 oynatır."""
+    p = copy.deepcopy(params)
+
+    def scale():
+        return rng.uniform(*PERTURB_RANGE)
+
+    for key in p["PTS"]:
+        p["PTS"][key] *= scale()
+    for key in ("H_CAT", "H_SLEEP"):
+        p[key] *= scale()
+    for group in ("W_CAT", "W_SLEEP"):
+        for key in p[group]:
+            p[group][key] *= scale()
+    for key in ("re_hi", "bout_hi"):
+        p["LOOP"][key] *= scale()
+    return p
+
+
+def warning_burden(scored):
+    share = scored.groupby("pid")["flagged"].mean()
+    critical = scored.loc[scored["level"] == "Kritik", "pid"].nunique() / scored["pid"].nunique()
+    return [
+        "\nKatılımcı başına Dikkat veya üstü gün payı:",
+        share.describe(percentiles=[0.5, 0.9]).round(3).to_string(),
+        f"Hiç uyarı almayan katılımcı payı: {(share == 0).mean():.3f}",
+        f"En az bir Kritik günü olan katılımcı payı: {critical:.3f}",
+    ]
+
+
+def sensitivity(days, risk):
+    rng = np.random.default_rng(0)
+    runs = [agreement(risk, compute_components(days, perturbed(DEFAULT, rng))["risk"])
+            for _ in range(N_PERTURBATIONS)]
+    table = pd.DataFrame(runs, columns=["spearman", "top10_ortusme"])
+    return [f"\nDuyarlılık ({N_PERTURBATIONS} rastgele parametre seti, ±%25):",
+            table.describe().loc[["mean", "min"]].round(3).to_string()]
+
+
+def ablation(scored):
+    rows = []
+    for dropped in COMPONENTS:
+        rest = scored[[c for c in COMPONENTS if c != dropped]].sum(axis=1)
+        rows.append((dropped, *agreement(scored["risk"], rest)))
+    table = pd.DataFrame(rows, columns=["cikarilan", "spearman", "top10_ortusme"])
+    return ["\nAblasyon (bileşen çıkarılınca tam skorla uyum):", table.round(3).to_string(index=False)]
+
+
+def main():
+    days = load_analysis_days()
+    scored = compute_components(days)
+    th = thresholds(scored["risk"])
+    scored = add_levels(scored, th)
+    scored.to_parquet(PROCESSED / "risk_daily.parquet")
+    with open(CONFIG / "risk_thresholds.json", "w", encoding="utf-8") as f:
+        json.dump({"quantiles": QUANTILES, "levels": LEVELS[1:], "thresholds": [round(t, 4) for t in th],
+                   "params": DEFAULT, "n_participant_days": len(scored),
+                   "n_participants": int(scored["pid"].nunique())}, f, ensure_ascii=False, indent=2)
+
+    lines = [
+        f"Katılımcı-gün: {len(scored)} | katılımcı: {scored['pid'].nunique()}",
+        "Eşikler (risk, 0-1): " + " | ".join(f"{name} >= {t:.3f}" for name, t in zip(LEVELS[1:], th)),
+        *warning_burden(scored),
+        "\nSeviyeye göre bileşen ortalamaları (puan):",
+        scored.groupby("level", observed=True)[COMPONENTS].mean().round(1).to_string(),
+        "\nBileşenler arası Spearman korelasyonu:",
+        scored[COMPONENTS].corr(method="spearman").round(2).to_string(),
+        *sensitivity(days, scored["risk"]),
+        *ablation(scored),
+    ]
+    report = "\n".join(lines)
+    print(report)
+    REPORTS.mkdir(exist_ok=True)
+    (REPORTS / "calibration.txt").write_text(report, encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

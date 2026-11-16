@@ -1,0 +1,40 @@
+Katılımcı-gün: 7394 | katılımcı: 274
+Eşikler (risk, 0-1): Dikkat >= 0.340 | Yüksek >= 0.542 | Kritik >= 0.737
+
+Katılımcı başına Dikkat veya üstü gün payı:
+count    274.000
+mean       0.104
+std        0.178
+min        0.000
+50%        0.030
+90%        0.368
+max        0.909
+Hiç uyarı almayan katılımcı payı: 0.478
+En az bir Kritik günü olan katılımcı payı: 0.073
+
+Seviyeye göre bileşen ortalamaları (puan):
+        cat_pts  sleep_pts  dev_pts  loop_pts
+level                                        
+Normal      3.9        1.2      1.2       0.7
+Dikkat     14.3       10.4      3.8       5.1
+Yüksek     17.9       19.7      6.1       6.8
+Kritik     19.3       24.0     11.6      10.0
+
+Bileşenler arası Spearman korelasyonu:
+           cat_pts  sleep_pts  dev_pts  loop_pts
+cat_pts       1.00       0.34     0.10      0.68
+sleep_pts     0.34       1.00     0.07      0.20
+dev_pts       0.10       0.07     1.00      0.09
+loop_pts      0.68       0.20     0.09      1.00
+
+Duyarlılık (30 rastgele parametre seti, ±%25):
+      spearman  top10_ortusme
+mean     0.997          0.850
+min      0.992          0.731
+
+Ablasyon (bileşen çıkarılınca tam skorla uyum):
+cikarilan  spearman  top10_ortusme
+  cat_pts     0.862          0.584
+sleep_pts     0.952          0.548
+  dev_pts     0.909          0.789
+ loop_pts     0.993          0.735
